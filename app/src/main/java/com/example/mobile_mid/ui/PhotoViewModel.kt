@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mobile_mid.data.AppDatabase
+import com.example.mobile_mid.data.NetworkModule
 import com.example.mobile_mid.data.PhotoEntity
 import com.example.mobile_mid.data.PhotoRepository
 import com.example.mobile_mid.util.PerformanceMonitor
@@ -19,6 +20,7 @@ import kotlinx.coroutines.withContext
 class PhotoViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository: PhotoRepository
+    private val apiService = NetworkModule.picsumApiService
     val photosState: StateFlow<List<PhotoEntity>>
 
     private val _isLoading = MutableStateFlow(false)
@@ -58,20 +60,22 @@ class PhotoViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                withContext(Dispatchers.IO) {
-                    val response = apiService.getPhotos(page = 1, limit = safeCount)
-                    if (response.isSuccessful && response.body() != null) {
-                        val photos = response.body()!!.map { picumPhoto ->
-                            val url = picumPhoto.downloadUrl
-                            val title = orDefault(picumPhoto.author, "Ảnh từ Picsum")
-                            PhotoEntity(url = url, title = title)
-                        }
-                        photos.forEach { repository.insertPhoto(it) }
+                val response = apiService.getPhotos(page = 2, limit = safeCount)
+                if (response.isSuccessful && response.body() != null) {
+                    val photos = response.body()!!.map { picumPhoto ->
+                        val url = "https://picsum.photos/id/${picumPhoto.id}/$safeSize"
+                        val title = orDefault(picumPhoto.author, "Ảnh từ Picsum")
+                        PhotoEntity(url = url, title = title)
                     }
+                    photos.forEach { repository.insertPhoto(it) }
                 }
             } finally {
                 _isLoading.value = false
             }
         }
+    }
+
+    private fun orDefault(value: String?, defaultValue: String): String {
+        return if (value.isNullOrBlank()) defaultValue else value
     }
 }
