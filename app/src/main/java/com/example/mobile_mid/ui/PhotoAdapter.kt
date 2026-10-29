@@ -17,6 +17,7 @@ import kotlinx.coroutines.withContext
 import java.net.URL
 
 class PhotoAdapter(
+    private val onItemClick: (PhotoEntity) -> Unit,
     private val onDeleteClick: (PhotoEntity) -> Unit
 ) : ListAdapter<PhotoEntity, PhotoAdapter.PhotoViewHolder>(PhotoDiffCallback()) {
 
@@ -61,6 +62,10 @@ class PhotoAdapter(
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
+            }
+
+            itemView.setOnClickListener {
+                onItemClick(photoItem)
             }
 
             binding.btnDelete.setOnClickListener {

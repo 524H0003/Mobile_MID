@@ -16,8 +16,10 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.GridLayoutManager
 import com.example.mobile_mid.databinding.ActivityMainBinding
 import com.example.mobile_mid.databinding.DialogAddPhotoBinding
+import com.example.mobile_mid.databinding.DialogAddPicsumBinding
 import com.example.mobile_mid.ui.PhotoAdapter
 import com.example.mobile_mid.ui.PhotoViewModel
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
@@ -45,6 +47,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupRecyclerView() {
         photoAdapter = PhotoAdapter(
+            onItemClick = { photo ->
+                DetailActivity.start(this, photo.url, photo.title)
+            },
             onDeleteClick = { photo ->
                 AlertDialog.Builder(this)
                     .setTitle("Xóa ảnh")
@@ -83,7 +88,25 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupListeners() {
         binding.fabAdd.setOnClickListener {
-            showAddPhotoDialog()
+            val bottomSheetDialog = BottomSheetDialog(this)
+            val view = layoutInflater.inflate(R.layout.layout_fab_bottom_sheet, null)
+            bottomSheetDialog.setContentView(view)
+
+            view.findViewById<View>(R.id.optionPhoto).setOnClickListener {
+                bottomSheetDialog.dismiss()
+                showAddPhotoDialog()
+            }
+
+            view.findViewById<View>(R.id.optionPicsum).setOnClickListener {
+                bottomSheetDialog.dismiss()
+                showAddPicsumDialog()
+            }
+
+            bottomSheetDialog.show()
+        }
+
+        binding.btnImportLibrary.setOnClickListener {
+            showAddPicsumDialog()
         }
 
         binding.btnSampleData.setOnClickListener {
@@ -107,6 +130,25 @@ class MainActivity : AppCompatActivity() {
                     viewModel.addPhoto(url, title)
                     Toast.makeText(this, "Đã thêm ảnh vào cơ sở dữ liệu", Toast.LENGTH_SHORT).show()
                 }
+            }
+            .setNegativeButton("Hủy", null)
+            .show()
+    }
+
+    private fun showAddPicsumDialog() {
+        val dialogBinding = DialogAddPicsumBinding.inflate(LayoutInflater.from(this))
+
+        AlertDialog.Builder(this)
+            .setView(dialogBinding.root)
+            .setPositiveButton("Thêm") { _, _ ->
+                val countStr = dialogBinding.etPicsumCount.text.toString()
+                val sizeStr = dialogBinding.etPicsumSize.text.toString()
+
+                val count = countStr.toIntOrNull() ?: 10
+                val size = sizeStr.toIntOrNull() ?: 400
+
+                viewModel.addPicsumPhotos(count, size)
+                Toast.makeText(this, "Đang thêm $count ảnh từ Picsum...", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("Hủy", null)
             .show()
