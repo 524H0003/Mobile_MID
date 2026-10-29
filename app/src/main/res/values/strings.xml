@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Mobile_MID</string>
+    <string name="image_content_description">Hình ảnh hiển thị</string>
 </resources>
