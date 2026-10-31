@@ -149,7 +149,6 @@ class PhotoBenchmarkTest {
         """.trimIndent()
 
         println(resultTable)
-        System.out.println(resultTable)
 
         // Gửi thông số tới Android Studio Test Runner Status
         val resultsBundle = Bundle().apply {
