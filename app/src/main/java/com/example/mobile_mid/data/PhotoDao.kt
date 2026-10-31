@@ -17,4 +17,7 @@ interface PhotoDao {
 
     @Delete
     fun deletePhoto(photo: PhotoEntity)
+
+    @Query("DELETE FROM photos")
+    fun deleteAllPhotos()
 }

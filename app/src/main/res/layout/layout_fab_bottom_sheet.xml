@@ -31,14 +31,14 @@
             style="@style/Widget.Material3.Button.OutlinedButton" />
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/optionPicsum"
+            android:id="@+id/optionRandomPicsum"
             style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="start"
-            android:text="Thêm ảnh từ Picsum"
+            android:text="Thêm ảnh ngẫu nhiên"
             android:textAllCaps="false"
-            app:icon="@android:drawable/ic_menu_rotate"
+            app:icon="@android:drawable/ic_menu_camera"
             app:iconGravity="start" />
 
     </LinearLayout>

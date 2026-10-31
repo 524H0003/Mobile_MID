@@ -10,7 +10,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Thêm nhiều ảnh từ Picsum"
+            android:text="Thêm ảnh ngẫu nhiên"
             android:textColor="?attr/colorPrimary"
             android:textSize="18sp"
             android:textStyle="bold" />
@@ -27,7 +27,7 @@
                 android:layout_height="wrap_content"
                 android:inputType="number"
                 android:singleLine="true"
-                android:text="10" />
+                android:text="1" />
 
         </com.google.android.material.textfield.TextInputLayout>
 
@@ -35,7 +35,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:hint="Kích thước (Width/Height)">
+            android:hint="Kích thước (px, thay thế 200)">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etPicsumSize"
@@ -43,7 +43,7 @@
                 android:layout_height="wrap_content"
                 android:inputType="number"
                 android:singleLine="true"
-                android:text="400" />
+                android:text="200" />
 
         </com.google.android.material.textfield.TextInputLayout>
 

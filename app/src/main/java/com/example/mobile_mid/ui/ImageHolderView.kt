@@ -7,9 +7,10 @@ import android.util.AttributeSet
 import android.util.Log
 import android.view.LayoutInflater
 import android.widget.FrameLayout
-import android.widget.ImageView
 import android.widget.Toast
 import com.example.mobile_mid.databinding.LayoutImageWithProgressBinding
+import com.example.mobile_mid.util.PerformanceMonitor
+import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -44,6 +45,8 @@ class ImageHolderView @JvmOverloads constructor(
         progressBar.visibility = VISIBLE
         iv.setImageDrawable(null)
 
+        val startTime = System.currentTimeMillis()
+
         // Use a Thread to avoid blocking the main thread
         Thread {
             var connection: HttpURLConnection? = null
@@ -56,11 +59,25 @@ class ImageHolderView @JvmOverloads constructor(
                 connection.connect()
 
                 if (connection.responseCode == HttpURLConnection.HTTP_OK) {
+                    var downloadedBytes = 0L
                     connection.inputStream.use { inputStream ->
-                        bitmap = BitmapFactory.decodeStream(inputStream)
+                        val bufferStream = ByteArrayOutputStream()
+                        val buffer = ByteArray(8192)
+                        var bytesRead: Int
+                        while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                            bufferStream.write(buffer, 0, bytesRead)
+                            downloadedBytes += bytesRead
+                        }
+                        val imageBytes = bufferStream.toByteArray()
+                        bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
                     }
-                } else {
-                    Log.w(TAG, "Server returned HTTP status: ${connection.responseCode}")
+
+                    val endTime = System.currentTimeMillis()
+                    val loadTimeMs = endTime - startTime
+
+                    // Ghi nhận thời gian tải và dung lượng mạng
+                    PerformanceMonitor.trackImageLoadTime(loadTimeMs)
+                    PerformanceMonitor.trackNetworkUsage(downloadedBytes)
                 }
 
                 // Update UI on main thread

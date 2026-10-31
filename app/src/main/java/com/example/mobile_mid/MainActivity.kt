@@ -19,6 +19,7 @@ import com.example.mobile_mid.databinding.DialogAddPhotoBinding
 import com.example.mobile_mid.databinding.DialogAddPicsumBinding
 import com.example.mobile_mid.ui.PhotoAdapter
 import com.example.mobile_mid.ui.PhotoViewModel
+import com.example.mobile_mid.util.PerformanceMonitor
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import kotlinx.coroutines.launch
 
@@ -27,6 +28,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private val viewModel: PhotoViewModel by viewModels()
     private lateinit var photoAdapter: PhotoAdapter
+    private var loadingDialog: AlertDialog? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,7 +44,17 @@ class MainActivity : AppCompatActivity() {
 
         setupRecyclerView()
         observePhotos()
+        observeLoading()
         setupListeners()
+
+        // Start performance tracking (Jank frames & RAM usage)
+        PerformanceMonitor.startFrameMetrics(this)
+        PerformanceMonitor.logMemoryUsage()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        PerformanceMonitor.logSessionSummary()
     }
 
     private fun setupRecyclerView() {
@@ -97,21 +109,16 @@ class MainActivity : AppCompatActivity() {
                 showAddPhotoDialog()
             }
 
-            view.findViewById<View>(R.id.optionPicsum).setOnClickListener {
+            view.findViewById<View>(R.id.optionRandomPicsum).setOnClickListener {
                 bottomSheetDialog.dismiss()
-                showAddPicsumDialog()
+                showAddRandomPicsumDialog()
             }
 
             bottomSheetDialog.show()
         }
 
         binding.btnImportLibrary.setOnClickListener {
-            showAddPicsumDialog()
-        }
-
-        binding.btnSampleData.setOnClickListener {
-            viewModel.addSamplePhotos()
-            Toast.makeText(this, "Đã tải danh sách ảnh mẫu vào cơ sở dữ liệu", Toast.LENGTH_SHORT).show()
+            showAddRandomPicsumDialog()
         }
     }
 
@@ -125,7 +132,8 @@ class MainActivity : AppCompatActivity() {
                 val title = dialogBinding.etPhotoTitle.text.toString()
 
                 if (url.isBlank()) {
-                    Toast.makeText(this, "Vui lòng nhập đường dẫn URL ảnh", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Vui lòng nhập đường dẫn URL ảnh", Toast.LENGTH_SHORT)
+                        .show()
                 } else {
                     viewModel.addPhoto(url, title)
                     Toast.makeText(this, "Đã thêm ảnh vào cơ sở dữ liệu", Toast.LENGTH_SHORT).show()
@@ -135,7 +143,35 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun showAddPicsumDialog() {
+    private fun observeLoading() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.isLoadingState.collect { isLoading ->
+                    if (isLoading) {
+                        if (loadingDialog == null) {
+                            val progressBar = android.widget.ProgressBar(this@MainActivity).apply {
+                                isIndeterminate = true
+                                setPadding(32, 32, 32, 32)
+                            }
+                            loadingDialog = AlertDialog.Builder(this@MainActivity)
+                                .setTitle("Đang tải ảnh ngẫu nhiên...")
+                                .setMessage("Vui lòng đợi trong giây lát...")
+                                .setView(progressBar)
+                                .setCancelable(false)
+                                .create()
+                        }
+                        if (loadingDialog?.isShowing == false) {
+                            loadingDialog?.show()
+                        }
+                    } else {
+                        loadingDialog?.dismiss()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun showAddRandomPicsumDialog() {
         val dialogBinding = DialogAddPicsumBinding.inflate(LayoutInflater.from(this))
 
         AlertDialog.Builder(this)
@@ -144,11 +180,11 @@ class MainActivity : AppCompatActivity() {
                 val countStr = dialogBinding.etPicsumCount.text.toString()
                 val sizeStr = dialogBinding.etPicsumSize.text.toString()
 
-                val count = countStr.toIntOrNull() ?: 10
-                val size = sizeStr.toIntOrNull() ?: 400
+                val count = countStr.toIntOrNull() ?: 1
+                val size = sizeStr.toIntOrNull() ?: 200
 
-                viewModel.addPicsumPhotos(count, size)
-                Toast.makeText(this, "Đang thêm $count ảnh từ Picsum...", Toast.LENGTH_SHORT).show()
+                viewModel.addRandomPicsumPhotos(count, size)
+                Toast.makeText(this, "Đang thêm $count ảnh ngẫu nhiên (${size}x$size)...", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("Hủy", null)
             .show()
