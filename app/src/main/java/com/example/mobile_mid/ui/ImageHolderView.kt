@@ -1,22 +1,22 @@
 package com.example.mobile_mid.ui
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.util.AttributeSet
 import android.util.Log
+import android.util.AttributeSet
 import android.view.LayoutInflater
 import android.widget.FrameLayout
 import android.widget.Toast
+import coil.load
+import coil.request.ImageResult
+import coil.request.SuccessResult
+import coil.request.ErrorResult
+import coil.request.ImageRequest
 import com.example.mobile_mid.databinding.LayoutImageWithProgressBinding
 import com.example.mobile_mid.util.PerformanceMonitor
-import java.io.ByteArrayOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
 
 /**
- * A simple custom compound view holding an ImageView and a loading ProgressBar,
- * with no redirect handling or bitmap optimization.
+ * A compound view that loads images efficiently using Coil.
+ * Displays a ProgressBar while loading and handles errors gracefully.
  */
 class ImageHolderView @JvmOverloads constructor(
     context: Context,
@@ -28,9 +28,17 @@ class ImageHolderView @JvmOverloads constructor(
         LayoutImageWithProgressBinding.inflate(LayoutInflater.from(context), this, true)
 
     /**
-     * Loads an image from the given URL simply and displays it on the ImageView.
+     * Loads an image from the given URL using Coil with optimizations.
+     *
+     * @param url The URL of the image to load
+     * @param onError Optional callback invoked when loading fails
+     * @param placeHolderResId Optional placeholder drawable resource ID
      */
-    fun loadUrl(url: String, onError: ((String) -> Unit)? = null) {
+    fun loadUrl(
+        url: String,
+        placeHolderResId: Int? = null,
+        onError: ((String) -> Unit)? = null,
+    ) {
         val iv = binding.ivImage
         val progressBar = binding.progressBar
 
@@ -47,78 +55,44 @@ class ImageHolderView @JvmOverloads constructor(
 
         val startTime = System.currentTimeMillis()
 
-        // Use a Thread to avoid blocking the main thread
-        Thread {
-            var connection: HttpURLConnection? = null
-            var bitmap: Bitmap? = null
-            try {
-                val urlObj = URL(url)
-                connection = urlObj.openConnection() as HttpURLConnection
-                connection.connectTimeout = REQUEST_TIMEOUT
-                connection.readTimeout = REQUEST_TIMEOUT
-                connection.connect()
+        // Pass the URL string directly, and configure inside the trailing lambda
+        iv.load(url) {
+            crossfade(true)
+            placeHolderResId?.let { placeholder(it) }
 
-                if (connection.responseCode == HttpURLConnection.HTTP_OK) {
-                    var downloadedBytes = 0L
-                    connection.inputStream.use { inputStream ->
-                        val bufferStream = ByteArrayOutputStream()
-                        val buffer = ByteArray(8192)
-                        var bytesRead: Int
-                        while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                            bufferStream.write(buffer, 0, bytesRead)
-                            downloadedBytes += bytesRead
-                        }
-                        val imageBytes = bufferStream.toByteArray()
-                        bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
-                    }
-
+            // Listen for success/error states to toggle the progress bar visibility
+            listener(
+                onSuccess = { _, _ ->
                     val endTime = System.currentTimeMillis()
                     val loadTimeMs = endTime - startTime
-
-                    // Ghi nhận thời gian tải và dung lượng mạng
                     PerformanceMonitor.trackImageLoadTime(loadTimeMs)
-                    PerformanceMonitor.trackNetworkUsage(downloadedBytes)
-                }
-
-                // Update UI on main thread
-                iv.post {
                     progressBar.visibility = GONE
-                    if (bitmap != null) {
-                        iv.setImageBitmap(bitmap)
-                    } else {
-                        val errorMsg = "Không thể tải ảnh"
-                        onError?.invoke(errorMsg) ?: run {
-                            Toast.makeText(
-                                context,
-                                errorMsg,
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }
+                    Log.d(TAG, "Image loaded successfully in ${loadTimeMs}ms")
+                },
+                onError = { _, result ->
+                    val endTime = System.currentTimeMillis()
+                    val loadTimeMs = endTime - startTime
+                    PerformanceMonitor.trackImageLoadTime(loadTimeMs)
+                    val errorMsg = result.throwable.message ?: "Lỗi tải ảnh"
+                    Log.e(TAG, "Error loading image: $errorMsg", result.throwable)
+                    progressBar.visibility = GONE
+                    onError?.invoke(errorMsg) ?: run {
+                        Toast.makeText(context, errorMsg, Toast.LENGTH_SHORT).show()
                     }
                 }
+            )
+        }
+    }
 
-            } catch (e: Exception) {
-                Log.e(TAG, "Exception loading bitmap from $url: ${e.message}", e)
-                progressBar.post {
-                    progressBar.visibility = GONE
-                    onError?.invoke("Không thể tải ảnh: ${e.message}") ?: run {
-                        Toast.makeText(
-                            context,
-                            "Không thể tải ảnh",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                }
-            } finally {
-                try {
-                    connection?.disconnect()
-                } catch (ignored: Exception) {}
-            }
-        }.start()
+    /**
+     * Cancels any ongoing image loading and clears the current image.
+     */
+    fun clear() {
+        binding.ivImage.setImageDrawable(null)
+        binding.progressBar.visibility = GONE
     }
 
     companion object {
         private const val TAG = "ImageHolderView"
-        private const val REQUEST_TIMEOUT = 15000
     }
 }
