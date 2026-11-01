@@ -24,7 +24,7 @@ class ImageHolderView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : FrameLayout(context, attrs, defStyleAttr) {
 
-    private val binding: LayoutImageWithProgressBinding =
+    val binding: LayoutImageWithProgressBinding =
         LayoutImageWithProgressBinding.inflate(LayoutInflater.from(context), this, true)
 
     /**
@@ -74,10 +74,10 @@ class ImageHolderView @JvmOverloads constructor(
 
                     val endTime = System.currentTimeMillis()
                     val loadTimeMs = endTime - startTime
+                    val bitmapBytes = bitmap?.allocationByteCount?.toLong() ?: 0L
 
-                    // Ghi nhận thời gian tải và dung lượng mạng
-                    PerformanceMonitor.trackImageLoadTime(loadTimeMs)
-                    PerformanceMonitor.trackNetworkUsage(downloadedBytes)
+                    // Ghi nhận thời gian tải, nguồn tải (NETWORK) và dung lượng Bitmap cấp phát
+                    PerformanceMonitor.trackImageLoadTime(loadTimeMs, "NETWORK", bitmapBytes)
                 }
 
                 // Update UI on main thread
@@ -98,6 +98,9 @@ class ImageHolderView @JvmOverloads constructor(
                 }
 
             } catch (e: Exception) {
+                val endTime = System.currentTimeMillis()
+                val loadTimeMs = endTime - startTime
+                PerformanceMonitor.trackImageLoadTime(loadTimeMs, "ERROR")
                 Log.e(TAG, "Exception loading bitmap from $url: ${e.message}", e)
                 progressBar.post {
                     progressBar.visibility = GONE
