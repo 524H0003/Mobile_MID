@@ -68,7 +68,7 @@ adb reverse tcp:8686 tcp:8686
 Chạy tất cả test case benchmark:
 
 ```bash
-./gradlew connectedAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.example.mobile_mid.PhotoBenchmarkTest
+./gradlew connectedAndroidTest
 ```
 
 ### Bước 5: Lấy kết quả benchmark
