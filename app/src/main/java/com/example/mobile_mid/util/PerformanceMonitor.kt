@@ -179,13 +179,14 @@ object PerformanceMonitor {
      * Returns CSV header string for data export.
      */
     fun getCsvHeader(): String {
-        return "Scenario,TotalDurationMs,DetailDurationMs,RamBeforeMb,RamAfterMb,NativeHeapMb,TotalFrames,JankFrames,JankPercent,SmoothnessPercent,ImagesLoaded,AvgLoadTimeMs,MemoryCacheHits,DiskCacheHits,NetworkLoads,CacheHitRatioPercent,TotalBitmapMb,MaxBitmapMb,AvgBitmapMb"
+        return "Timestamp,Scenario,TotalDurationMs,DetailDurationMs,RamBeforeMb,RamAfterMb,NativeHeapMb,TotalFrames,JankFrames,JankPercent,SmoothnessPercent,ImagesLoaded,AvgLoadTimeMs,MemoryCacheHits,DiskCacheHits,NetworkLoads,CacheHitRatioPercent,TotalBitmapMb,MaxBitmapMb,AvgBitmapMb"
     }
 
     /**
      * Returns CSV data row string corresponding to getCsvHeader().
      */
     fun getCsvLine(scenarioName: String, durationMs: Long, detailDurationMs: Long, ramBeforeMb: Long, ramAfterMb: Long, nativeHeapMb: Long): String {
+        val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(java.util.Date())
         val total = totalFrames.get()
         val janks = jankCount.get()
         val jankPercent = if (total > 0) (janks.toFloat() / total * 100) else 0f
@@ -206,8 +207,8 @@ object PerformanceMonitor {
 
         return String.format(
             Locale.US,
-            "\"%s\",%d,%d,%d,%d,%d,%d,%d,%.2f,%.2f,%d,%.2f,%d,%d,%d,%.2f,%.2f,%.2f,%.2f",
-            scenarioName, durationMs, detailDurationMs, ramBeforeMb, ramAfterMb, nativeHeapMb,
+            "\"%s\",\"%s\",%d,%d,%d,%d,%d,%d,%d,%.2f,%.2f,%d,%.2f,%d,%d,%d,%.2f,%.2f,%.2f,%.2f",
+            timestamp, scenarioName, durationMs, detailDurationMs, ramBeforeMb, ramAfterMb, nativeHeapMb,
             total, janks, jankPercent, if (smoothness < 0) 0f else smoothness,
             count, avgLoadTime,
             memHits, diskHits, netLoads, cacheHitRatio,
