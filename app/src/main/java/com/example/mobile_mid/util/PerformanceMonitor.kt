@@ -7,6 +7,7 @@ import android.os.Looper
 import android.util.Log
 import android.view.FrameMetrics
 import android.view.Window
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
@@ -172,6 +173,46 @@ object PerformanceMonitor {
         Log.i(TAG, String.format("%-36s : %.2f MB", "Dung lượng Bitmap lớn nhất", maxBitmapMb))
         Log.i(TAG, String.format("%-36s : %.2f MB", "Dung lượng Bitmap trung bình/ảnh", avgBitmapMb))
         Log.i(TAG, "==========================================================")
+    }
+
+    /**
+     * Returns CSV header string for data export.
+     */
+    fun getCsvHeader(): String {
+        return "Scenario,TotalDurationMs,DetailDurationMs,RamBeforeMb,RamAfterMb,NativeHeapMb,TotalFrames,JankFrames,JankPercent,SmoothnessPercent,ImagesLoaded,AvgLoadTimeMs,MemoryCacheHits,DiskCacheHits,NetworkLoads,CacheHitRatioPercent,TotalBitmapMb,MaxBitmapMb,AvgBitmapMb"
+    }
+
+    /**
+     * Returns CSV data row string corresponding to getCsvHeader().
+     */
+    fun getCsvLine(scenarioName: String, durationMs: Long, detailDurationMs: Long, ramBeforeMb: Long, ramAfterMb: Long, nativeHeapMb: Long): String {
+        val total = totalFrames.get()
+        val janks = jankCount.get()
+        val jankPercent = if (total > 0) (janks.toFloat() / total * 100) else 0f
+        val smoothness = 100f - jankPercent
+
+        val count = imageLoadCount.get()
+        val avgLoadTime = if (count > 0) (totalImageLoadTimeMs.get().toDouble() / count) else 0.0
+
+        val memHits = memoryCacheHits.get()
+        val diskHits = diskCacheHits.get()
+        val netLoads = networkLoads.get()
+        val cacheHitsTotal = memHits + diskHits
+        val cacheHitRatio = if (count > 0) (cacheHitsTotal.toFloat() / count * 100) else 0f
+
+        val totalBitmapMb = totalBitmapMemoryBytes.get().toDouble() / (1024 * 1024)
+        val maxBitmapMb = maxSingleBitmapBytes.get().toDouble() / (1024 * 1024)
+        val avgBitmapMb = if (count > 0) totalBitmapMb / count else 0.0
+
+        return String.format(
+            Locale.US,
+            "\"%s\",%d,%d,%d,%d,%d,%d,%d,%.2f,%.2f,%d,%.2f,%d,%d,%d,%.2f,%.2f,%.2f,%.2f",
+            scenarioName, durationMs, detailDurationMs, ramBeforeMb, ramAfterMb, nativeHeapMb,
+            total, janks, jankPercent, if (smoothness < 0) 0f else smoothness,
+            count, avgLoadTime,
+            memHits, diskHits, netLoads, cacheHitRatio,
+            totalBitmapMb, maxBitmapMb, avgBitmapMb
+        )
     }
 
     /**
