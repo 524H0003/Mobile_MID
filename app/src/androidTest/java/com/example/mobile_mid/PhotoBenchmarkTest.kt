@@ -179,6 +179,9 @@ class PhotoBenchmarkTest {
         println(resultTable)
         PerformanceMonitor.logSessionSummary()
 
+        // Ghi tổng hợp kết quả ra file CSV trên bộ nhớ thiết bị
+        saveResultToFile(context, scenarioName, durationMs, detailDurationMs, ramBeforeMb, ramAfterMb, nativeHeapMb)
+
         val resultsBundle = Bundle().apply {
             putString("benchmark_scenario", scenarioName)
             putLong("duration_ms", durationMs)
@@ -221,5 +224,41 @@ class PhotoBenchmarkTest {
     @Test
     fun test_1000_photos_size_large() {
         runBenchmarkScenario(count = 1000, size = large)
+    }
+
+    private fun saveResultToFile(
+        context: android.content.Context,
+        scenarioName: String,
+        durationMs: Long,
+        detailDurationMs: Long,
+        ramBeforeMb: Long,
+        ramAfterMb: Long,
+        nativeHeapMb: Long
+    ) {
+        val csvHeader = PerformanceMonitor.getCsvHeader() + "\n"
+        val csvLine = PerformanceMonitor.getCsvLine(
+            scenarioName, durationMs, detailDurationMs, ramBeforeMb, ramAfterMb, nativeHeapMb
+        ) + "\n"
+
+        val targetDirs = listOfNotNull(
+            java.io.File("/sdcard/Download"),
+            android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS),
+            context.getExternalFilesDir(null),
+            context.filesDir
+        ).distinct()
+
+        for (dir in targetDirs) {
+            try {
+                if (!dir.exists()) dir.mkdirs()
+                val csvFile = java.io.File(dir, "benchmark_results.csv")
+
+                if (!csvFile.exists()) csvFile.writeText(csvHeader)
+                csvFile.appendText(csvLine)
+
+                println("📄 [ĐÃ XUẤT BÁO CÁO]: ${csvFile.absolutePath}")
+            } catch (e: Exception) {
+                println("⚠️ Không thể ghi file vào ${dir.absolutePath}: ${e.message}")
+            }
+        }
     }
 }

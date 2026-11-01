@@ -11,3 +11,4 @@ local.properties
 cache
 node_modules
 *-lock.json
+benchmark_results.*
