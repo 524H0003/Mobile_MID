@@ -58,17 +58,15 @@ class PhotoViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                PerformanceMonitor.measureTime("AddRandomPicsumPhotos (count=$safeCount, size=$safeSize)") {
-                    withContext(Dispatchers.IO) {
-                        for (i in 0 until safeCount) {
-                            val randomId = (0..1084).random()
-                            val url = "http://localhost:8686/id/$randomId/$safeSize/$safeSize"
-                            val photo = PhotoEntity(
-                                url = url,
-                                title = "Ảnh ngẫu nhiên #$randomId (${safeSize}x$safeSize)"
-                            )
-                            repository.insertPhoto(photo)
-                        }
+                withContext(Dispatchers.IO) {
+                    for (i in 0 until safeCount) {
+                        val randomId = (0..1084).random()
+                        val url = "http://localhost:8686/id/$randomId/$safeSize/$safeSize"
+                        val photo = PhotoEntity(
+                            url = url,
+                            title = "Ảnh ngẫu nhiên #$randomId (${safeSize}x$safeSize)"
+                        )
+                        repository.insertPhoto(photo)
                     }
                 }
                 PerformanceMonitor.logMemoryUsage()
