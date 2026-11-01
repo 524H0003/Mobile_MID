@@ -3,14 +3,17 @@ package com.example.mobile_mid
 import android.os.Bundle
 import android.os.Debug
 import android.view.View
-import android.widget.ProgressBar
 import androidx.recyclerview.widget.RecyclerView
 import androidx.test.core.app.ActivityScenario
+import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.contrib.RecyclerViewActions
+import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.mobile_mid.data.AppDatabase
 import com.example.mobile_mid.data.PhotoEntity
 import com.example.mobile_mid.ui.PhotoAdapter
+import com.example.mobile_mid.util.PerformanceMonitor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -20,7 +23,6 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class PhotoBenchmarkTest {
-
 
     @Before
     fun setUp() {
@@ -33,21 +35,40 @@ class PhotoBenchmarkTest {
     }
 
     /**
-     * Kiểm tra xem có ảnh nào trong RecyclerView đang hiển thị ProgressBar (đang tải) hay không
      */
-    private fun isAnyImageLoading(recyclerView: RecyclerView): Boolean {
-        for (i in 0 until recyclerView.childCount) {
-            val child = recyclerView.getChildAt(i)
-            val progressBar = child.findViewById<ProgressBar>(R.id.progressBar)
-            if (progressBar != null && progressBar.visibility == View.VISIBLE) {
-                return true
+    private fun scrollThroughItems(totalItems: Int, recyclerView: RecyclerView): Boolean {
+        var isLoading = true
+
+        for (i in 0 until totalItems) {
+            // Cuộn màn hình tới item vị trí i bằng Espresso
+            onView(withId(R.id.rvPhotos))
+                .perform(RecyclerViewActions.scrollToPosition<RecyclerView.ViewHolder>(i))
+
+            Thread.sleep(100)
+
+            // Kiểm tra trạng thái ProgressBar của các child đang hiển thị trên UI Thread
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                val viewHolder =
+                    recyclerView.findViewHolderForAdapterPosition(i) as? PhotoAdapter.PhotoViewHolder
+
+                val progressBar =
+                    viewHolder?.binding?.imageWithProgress?.binding?.progressBar // hoặc viewHolder?.binding?.progressBar nếu bạn dùng ViewBinding
+
+                var attempt = 1000
+                while (progressBar != null && progressBar.visibility == View.VISIBLE && attempt > 0) {
+                    Thread.sleep(1000)
+                    attempt--
+                }
+
+                if (attempt == 0) isLoading = false
             }
         }
-        return false
+        return isLoading
     }
 
     private fun runBenchmarkScenario(count: Int, size: Int) {
         val scenarioName = "TC: $count ảnh - Kích thước: $size"
+        PerformanceMonitor.resetMetrics()
         println("\n----------------------------------------------------------")
         println("Đang thực thi kịch bản: $scenarioName")
 
@@ -55,7 +76,6 @@ class PhotoBenchmarkTest {
         val database = AppDatabase.getDatabase(context)
         val photoDao = database.photoDao()
 
-        // 1. Chuẩn bị dữ liệu danh sách ảnh thử nghiệm (Xóa sạch CSDL cũ để đảm bảo tính Lũy Đẳng)
         runBlocking(Dispatchers.IO) {
             photoDao.deleteAllPhotos()
             for (i in 0 until count) {
@@ -75,52 +95,63 @@ class PhotoBenchmarkTest {
         val startTime = System.currentTimeMillis()
         var detailDurationMs = 0L
 
-        // 2. Khởi chạy Activity, chờ tất cả ảnh được tải xong
+        // Khởi chạy Activity
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            Thread.sleep(1000)
+
+            var totalItems = 0
+            var recyclerViewRef: RecyclerView? = null
+
             scenario.onActivity { activity ->
                 val recyclerView = activity.findViewById<RecyclerView>(R.id.rvPhotos)
                 val photoAdapter = recyclerView?.adapter as? PhotoAdapter
-                val totalItems = photoAdapter?.itemCount ?: 0
+                totalItems = photoAdapter?.itemCount ?: 0
+                recyclerViewRef = recyclerView
+            }
 
-                if (totalItems > 0 && photoAdapter != null) {
-                    // Chờ cho RecyclerView hoàn tất setup và tất cả ảnh đã tải xong
-                    Thread.sleep(3000) // Đợi 3 giây để RecyclerView setup và tải tất cả ảnh
+            if (recyclerViewRef != null && totalItems > 0) {
+                // TÁC VỤ 1: Cuộn qua tất cả item trong vòng lặp và kiểm tra loading
+                val isLoading = scrollThroughItems(totalItems, recyclerViewRef)
+                if (isLoading) {
+                    println("⚠️ CẢNH BÁO: Vẫn còn ảnh đang tải trong quá trình cuộn!")
+                } else {
+                    println("✓ Tất cả ảnh hiển thị đã được tải xong")
+                }
 
-                    // Kiểm tra xem có ảnh nào đang tải không
-                    val isLoading = isAnyImageLoading(recyclerView)
-                    if (isLoading) {
-                        println("⚠️ CẢNH BÁO: Vẫn còn ảnh đang tải sau 3 giây!")
-                    } else {
-                        println("✓ Tất cả ảnh đã được tải xong")
-                    }
+                // Chọn ngẫu nhiên 1 vị trí
+                val randomIndex = (0 until totalItems).shuffled().first()
 
-                    // Lấy 1 vị trí ngẫu nhiên duy nhất trong danh sách
-                    val randomIndex = (0 until totalItems).shuffled().take(1).first()
+                // TÁC VỤ 2: CUỘN MÀN HÌNH TỚI ITEM ĐƯỢC CHỌN NGẪU NHIÊN
+                println("🔄 Đang cuộn tới item ngẫu nhiên tại vị trí: $randomIndex")
+                onView(withId(R.id.rvPhotos))
+                    .perform(
+                        RecyclerViewActions.scrollToPosition<RecyclerView.ViewHolder>(
+                            randomIndex
+                        )
+                    )
 
-                    // Mở 1 ảnh ngẫu nhiên vào DetailActivity
-                    recyclerView.scrollToPosition(randomIndex)
-                    Thread.sleep(1000) // Đợi ảnh được chọn hiển thị xong
+                Thread.sleep(1000) // Nghỉ 1s để giao diện dừng hẳn ở vị trí đã cuộn tới
 
-                    val photo = photoAdapter.currentList.getOrNull(randomIndex)
+                // Mở DetailActivity cho item đã cuộn tới
+                scenario.onActivity { activity ->
+                    val photoAdapter = recyclerViewRef?.adapter as? PhotoAdapter
+                    val photo = photoAdapter?.currentList?.getOrNull(randomIndex)
 
                     if (photo != null) {
-                        // BẮT ĐẦU KHỞI ĐỘNG THỜI ĐO XEM ẢNH
                         val startTimeDetail = System.currentTimeMillis()
 
                         DetailActivity.start(activity, photo.url, photo.title)
 
-                        Thread.sleep(3000) // Đợi 3 giây để xem ảnh trong DetailActivity
-
-                        // KẾT THÚC THỜI ĐO XEM ẢNH
                         val endTimeDetail = System.currentTimeMillis()
                         detailDurationMs = endTimeDetail - startTimeDetail
-
-                        // In kết quả riêng biệt thời gian xem ảnh
-                        println("\n📊 KẾT QUẢ RIÊNG:")
-                        println("⏱️  Thời gian xem ảnh (DetailActivity): $detailDurationMs ms")
-                        System.out.println("⏱️  View detail time: $detailDurationMs ms")
                     }
                 }
+
+                // Đợi 3 giây xem ảnh trong DetailActivity
+                Thread.sleep(3000)
+
+                println("\n📊 KẾT QUẢ RIÊNG:")
+                println("⏱️  Thời gian xem ảnh (DetailActivity): $detailDurationMs ms")
             }
         }
 
@@ -133,8 +164,6 @@ class PhotoBenchmarkTest {
 
         // In bảng kết quả tổng hợp
         val resultTable = """
-            
-
         ========================================================================================================
         ===                                BẢNG KẾT QUẢ BENCHMARK TEST CASE                                  ===
         ========================================================================================================
@@ -145,12 +174,11 @@ class PhotoBenchmarkTest {
         | RAM Heap sử dụng sau khi chạy                 : $ramAfterMb MB
         | Native Heap cấp phát                          : $nativeHeapMb MB
         ========================================================================================================
-        
         """.trimIndent()
 
         println(resultTable)
+        PerformanceMonitor.logSessionSummary()
 
-        // Gửi thông số tới Android Studio Test Runner Status
         val resultsBundle = Bundle().apply {
             putString("benchmark_scenario", scenarioName)
             putLong("duration_ms", durationMs)
@@ -162,10 +190,9 @@ class PhotoBenchmarkTest {
         InstrumentationRegistry.getInstrumentation().sendStatus(0, resultsBundle)
     }
 
-    val small = 1000
-    val large = 4000
+    val small = 500
+    val large = 2000
 
-    // --- BỘ TEST CASE CHO 10 ẢNH ---
     @Test
     fun test_10_photos_size_small() {
         runBenchmarkScenario(count = 10, size = small)
@@ -176,7 +203,6 @@ class PhotoBenchmarkTest {
         runBenchmarkScenario(count = 10, size = large)
     }
 
-    // --- BỘ TEST CASE CHO 100 ẢNH ---
     @Test
     fun test_100_photos_size_small() {
         runBenchmarkScenario(count = 100, size = small)
@@ -187,7 +213,6 @@ class PhotoBenchmarkTest {
         runBenchmarkScenario(count = 100, size = large)
     }
 
-    // --- BỘ TEST CASE CHO 1.000 ẢNH ---
     @Test
     fun test_1000_photos_size_small() {
         runBenchmarkScenario(count = 1000, size = small)

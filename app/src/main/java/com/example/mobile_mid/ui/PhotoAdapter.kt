@@ -27,7 +27,7 @@ class PhotoAdapter(
     }
 
     inner class PhotoViewHolder(
-        private val binding: ItemPhotoBinding
+        val binding: ItemPhotoBinding
     ) : RecyclerView.ViewHolder(binding.root) {
 
         fun bind(photoItem: PhotoEntity) {

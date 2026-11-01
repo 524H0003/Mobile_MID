@@ -49,7 +49,6 @@ class MainActivity : AppCompatActivity() {
 
         // Start performance tracking (Jank frames & RAM usage)
         PerformanceMonitor.startFrameMetrics(this)
-        PerformanceMonitor.logMemoryUsage()
     }
 
     override fun onDestroy() {
