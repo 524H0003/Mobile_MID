@@ -42,6 +42,7 @@ dependencies {
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.espresso.contrib)
+    implementation(libs.androidx.uiautomator)
     implementation(libs.material)
 
     // Room
