@@ -8,15 +8,17 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.widget.FrameLayout
 import android.widget.Toast
+import com.example.mobile_mid.data.NetworkModule
 import com.example.mobile_mid.databinding.LayoutImageWithProgressBinding
 import com.example.mobile_mid.util.PerformanceMonitor
 import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
 /**
  * A simple custom compound view holding an ImageView and a loading ProgressBar,
- * with no redirect handling or bitmap optimization.
+ * using raw HttpURLConnection for HTTP requests (unoptimized version).
  */
 class ImageHolderView @JvmOverloads constructor(
     context: Context,
@@ -27,9 +29,6 @@ class ImageHolderView @JvmOverloads constructor(
     val binding: LayoutImageWithProgressBinding =
         LayoutImageWithProgressBinding.inflate(LayoutInflater.from(context), this, true)
 
-    /**
-     * Loads an image from the given URL simply and displays it on the ImageView.
-     */
     fun loadUrl(url: String, onError: ((String) -> Unit)? = null) {
         val iv = binding.ivImage
         val progressBar = binding.progressBar
@@ -47,11 +46,14 @@ class ImageHolderView @JvmOverloads constructor(
 
         val startTime = System.currentTimeMillis()
 
-        // Use a Thread to avoid blocking the main thread
         Thread {
             var connection: HttpURLConnection? = null
             var bitmap: Bitmap? = null
             try {
+                if (NetworkModule.isOffline) {
+                    throw IOException("Network is offline (Simulated)")
+                }
+
                 val urlObj = URL(url)
                 connection = urlObj.openConnection() as HttpURLConnection
                 connection.connectTimeout = REQUEST_TIMEOUT
@@ -76,11 +78,9 @@ class ImageHolderView @JvmOverloads constructor(
                     val loadTimeMs = endTime - startTime
                     val bitmapBytes = bitmap?.allocationByteCount?.toLong() ?: 0L
 
-                    // Ghi nhận thời gian tải, nguồn tải (NETWORK) và dung lượng Bitmap cấp phát
                     PerformanceMonitor.trackImageLoadTime(loadTimeMs, "NETWORK", bitmapBytes)
                 }
 
-                // Update UI on main thread
                 iv.post {
                     progressBar.visibility = GONE
                     if (bitmap != null) {
