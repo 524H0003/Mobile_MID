@@ -41,8 +41,8 @@ Sau khi test hoàn tất, lấy file kết quả:
 
 ```bash
 adb pull /sdcard/Download/benchmark_results.csv .
-adb pull /sdcard/Download/tc05_offline_mode_list.png .
-adb pull /sdcard/Download/tc05_offline_mode_detail.png .
+adb pull /sdcard/Download/tc05_offline_list.png .
+adb pull /sdcard/Download/tc05_offline_detail.png .
 ```
 
 Mở file `benchmark_results.csv` để xem các chỉ số.

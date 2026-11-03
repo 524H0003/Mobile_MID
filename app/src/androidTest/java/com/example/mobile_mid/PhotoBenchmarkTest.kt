@@ -50,12 +50,47 @@ class PhotoBenchmarkTest {
         } catch (_: Exception) {}
     }
 
+    /**
+     * Thống nhất lưu file vào /sdcard/Download (thư mục công khai dễ dàng adb pull)
+     * với cơ chế fallback tự động sang external/internal files dir nếu cần.
+     */
+    private fun writeToFileInDirs(fileName: String, action: (java.io.File) -> Unit) {
+        val candidateDirs = listOfNotNull(
+            java.io.File("/sdcard/Download"),
+            android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS),
+            context.getExternalFilesDir(null),
+            context.filesDir
+        ).map { runCatching { it.canonicalFile }.getOrDefault(it) }
+            .distinctBy { it.absolutePath }
+
+        for (dir in candidateDirs) {
+            try {
+                if (!dir.exists()) dir.mkdirs()
+                val targetFile = java.io.File(dir, fileName)
+                action(targetFile)
+                println("✅ [ĐÃ LƯU THÀNH CÔNG]: ${targetFile.absolutePath}")
+                break
+            } catch (e: Exception) {
+                println("⚠️ Thử lưu vào ${dir.absolutePath} thất bại: ${e.message}")
+            }
+        }
+    }
+
     private fun captureScreenshot(name: String) {
         try {
-            val dir = context.getExternalFilesDir(null) ?: context.filesDir
-            if (!dir.exists()) dir.mkdirs()
-            uiDevice.takeScreenshot(java.io.File(dir, "$name.png"))
-        } catch (_: Exception) {}
+            val bitmap = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+            if (bitmap != null) {
+                writeToFileInDirs("$name.png") { file ->
+                    java.io.FileOutputStream(file).use { fos ->
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, fos)
+                        fos.flush()
+                    }
+                }
+                bitmap.recycle()
+            }
+        } catch (e: Exception) {
+            println("⚠️ Lỗi chụp màn hình: ${e.message}")
+        }
     }
 
     private fun populateDatabase(count: Int, size: Int, isError: Boolean = false) {
@@ -78,7 +113,7 @@ class PhotoBenchmarkTest {
             InstrumentationRegistry.getInstrumentation().runOnMainSync {
                 val holder = recyclerView.findViewHolderForAdapterPosition(i) as? PhotoAdapter.PhotoViewHolder
                 val pb = holder?.binding?.imageWithProgress?.binding?.progressBar
-                var attempts = 3
+                var attempts = 10
                 while (pb != null && pb.visibility == View.VISIBLE && attempts > 0) {
                     Thread.sleep(300)
                     attempts--
@@ -207,31 +242,11 @@ class PhotoBenchmarkTest {
     }
 
     private fun saveResult(code: String, name: String, dur: Long, detailDur: Long, ramBefore: Long, ramAfter: Long, native: Long) {
-        val csvLine = PerformanceMonitor.getCsvLine(
-            "[$code] $name", dur, detailDur, ramBefore, ramAfter, native
-        ) + "\n"
-        val csvHeader = PerformanceMonitor.getCsvHeader() + "\n"
-
-        val candidateDirs = listOfNotNull(
-            android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS),
-            context.getExternalFilesDir(null),
-            context.filesDir
-        ).map { runCatching { it.canonicalFile }.getOrDefault(it) }
-            .distinctBy { it.absolutePath }
-
-        for (dir in candidateDirs) {
-            try {
-                if (!dir.exists()) dir.mkdirs()
-                val csvFile = java.io.File(dir, "benchmark_results.csv")
-
-                if (!csvFile.exists()) csvFile.writeText(csvHeader)
-                csvFile.appendText(csvLine)
-
-                println("📄 [ĐÃ XUẤT BÁO CÁO]: ${csvFile.absolutePath}")
-                break
-            } catch (e: Exception) {
-                println("⚠️ Không thể ghi file vào ${dir.absolutePath}: ${e.message}")
-            }
+        val line = PerformanceMonitor.getCsvLine("[$code] $name", dur, detailDur, ramBefore, ramAfter, native) + "\n"
+        val header = PerformanceMonitor.getCsvHeader() + "\n"
+        writeToFileInDirs("benchmark_results.csv") { file ->
+            if (!file.exists()) file.writeText(header)
+            file.appendText(line)
         }
     }
 

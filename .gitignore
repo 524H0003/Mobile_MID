@@ -11,5 +11,6 @@ local.properties
 cache
 node_modules
 *-lock.json
-benchmark_results.*
+/benchmark_results.*
+/*.png
 .kotlin
