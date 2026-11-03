@@ -8,13 +8,6 @@ Dự án demo Android để benchmark hiệu năng việc tải và hiển thị
 - Android SDK 37
 - Thiết bị Android hoặc emulator đã bật Debug (adb)
 
-## Cài đặt nhanh
-
-```bash
-# Build ứng dụng Android
-./gradlew assembleDebug
-```
-
 ## Thiết lập kết nối Localhost
 
 Để cho phép ứng dụng trên máy ảo/thiết bị Android truy cập vào các dịch vụ chạy trên máy tính host (`localhost`), sử dụng lệnh ADB Reverse:
