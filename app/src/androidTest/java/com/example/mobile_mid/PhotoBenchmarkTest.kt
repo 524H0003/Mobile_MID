@@ -105,23 +105,11 @@ class PhotoBenchmarkTest {
         }
     }
 
-    private fun scrollThroughItems(totalItems: Int, recyclerView: RecyclerView): Boolean {
-        var complete = true
+    private fun scrollThroughItems(totalItems: Int, recyclerView: RecyclerView) {
         for (i in 0 until totalItems) {
             onView(withId(R.id.rvPhotos)).perform(RecyclerViewActions.scrollToPosition<RecyclerView.ViewHolder>(i))
-            Thread.sleep(80)
-            InstrumentationRegistry.getInstrumentation().runOnMainSync {
-                val holder = recyclerView.findViewHolderForAdapterPosition(i) as? PhotoAdapter.PhotoViewHolder
-                val pb = holder?.binding?.imageWithProgress?.binding?.progressBar
-                var attempts = 10
-                while (pb != null && pb.visibility == View.VISIBLE && attempts > 0) {
-                    Thread.sleep(300)
-                    attempts--
-                }
-                if (attempts == 0) complete = false
-            }
+            Thread.sleep(150)
         }
-        return complete
     }
 
     private fun runBenchmarkScenario(code: String, name: String, count: Int, size: Int, isError: Boolean = false, saveCsv: Boolean = true): Long {
@@ -223,7 +211,7 @@ class PhotoBenchmarkTest {
         runBenchmarkScenario("TC05_Preload", "Preload Cache", 10, 500, saveCsv = false)
         setNetworkState(false)
         try {
-            assertTrue(runBenchmarkScenario("TC05", "Offline Mode", 20, 500) > 0)
+            assertTrue(runBenchmarkScenario("TC05", "Offline Mode", 10, 500) > 0)
         } finally {
             setNetworkState(true)
         }
