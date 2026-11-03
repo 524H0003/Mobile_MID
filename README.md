@@ -15,13 +15,25 @@ Dự án demo Android để benchmark hiệu năng việc tải và hiển thị
 ./gradlew assembleDebug
 ```
 
+## Thiết lập kết nối Localhost
+
+Để cho phép ứng dụng trên máy ảo/thiết bị Android truy cập vào các dịch vụ chạy trên máy tính host (`localhost`), sử dụng lệnh ADB Reverse:
+
+```bash
+adb reverse tcp:8080 tcp:8080
+```
+
 ## Chạy Benchmark Test
 
 ### Bước 1: Chuẩn bị môi trường
 
-1. **Khởi động image server** (xem hướng dẫn ở trên)
+1. **Khởi động image server**
 
-2. **Kết nối thiết bị** và kiểm tra:
+```bash
+docker compose up -d
+```
+
+1. **Kết nối thiết bị** và kiểm tra:
 
    ```bash
    adb devices
@@ -44,15 +56,3 @@ adb pull /sdcard/Download/benchmark_results.csv .
 adb pull /sdcard/Download/tc05_offline_list.png .
 adb pull /sdcard/Download/tc05_offline_detail.png .
 ```
-
-Mở file `benchmark_results.csv` để xem các chỉ số.
-
-## Lưu ý quan trọng
-
-1. **Image Server**: Phải chạy trước khi chạy test, nếu không test sẽ thất bại do không tải được ảnh.
-
-2. **ADB Reverse**: Lệnh `adb reverse tcp:8686 tcp:8686` rất quan trọng - cho phép thiết bị truy cập localhost của máy host.
-
-3. **Quyền lưu trữ**: Thiết bị cần đủ quyền để ghi file vào thư mục Download.
-
-4. **GC và bộ nhớ**: Test sử dụng `Runtime.gc()` để đo lường bộ nhớ, kết quả có thể thay đổi tùy vào trạng thái hệ thống.

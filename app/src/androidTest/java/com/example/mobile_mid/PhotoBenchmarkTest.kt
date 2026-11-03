@@ -14,6 +14,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import coil.imageLoader
 import com.example.mobile_mid.data.AppDatabase
+import com.example.mobile_mid.data.NetworkModule
 import com.example.mobile_mid.data.PhotoEntity
 import com.example.mobile_mid.ui.PhotoAdapter
 import com.example.mobile_mid.util.PerformanceMonitor
@@ -98,7 +99,7 @@ class PhotoBenchmarkTest {
         runBlocking(Dispatchers.IO) {
             photoDao.deleteAllPhotos()
             for (i in 0 until count) {
-                val url = if (isError) "https://invalid-picsum-404.test/$i" else "https://picsum.photos/id/${i % 1084}/$size"
+                val url = if (isError) "https://invalid-picsum-404.test/$i" else "${NetworkModule.BASE_URL}/id/${i % 1084}/$size"
                 val title = if (isError) "Error #$i" else "Photo #${i % 1084} (${size}x$size)"
                 photoDao.insertPhoto(PhotoEntity(url = url, title = title))
             }
@@ -239,9 +240,10 @@ class PhotoBenchmarkTest {
     }
 
     private fun setNetworkState(enabled: Boolean) {
+        com.example.mobile_mid.data.NetworkModule.isOffline = !enabled
         val action = if (enabled) "enable" else "disable"
         uiDevice.executeShellCommand("svc wifi $action")
         uiDevice.executeShellCommand("svc data $action")
-        Thread.sleep(1200)
+        Thread.sleep(500)
     }
 }

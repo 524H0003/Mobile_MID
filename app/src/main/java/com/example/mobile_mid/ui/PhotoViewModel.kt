@@ -18,7 +18,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class PhotoViewModel(application: Application) : AndroidViewModel(application) {
-
     private val repository: PhotoRepository
     private val apiService = NetworkModule.picsumApiService
     val photosState: StateFlow<List<PhotoEntity>>
@@ -63,7 +62,7 @@ class PhotoViewModel(application: Application) : AndroidViewModel(application) {
                 val response = apiService.getPhotos(page = 2, limit = safeCount)
                 if (response.isSuccessful && response.body() != null) {
                     val photos = response.body()!!.map { picumPhoto ->
-                        val url = "https://picsum.photos/id/${picumPhoto.id}/$safeSize"
+                        val url = "${NetworkModule.BASE_URL}/id/${picumPhoto.id}/$safeSize"
                         val title = orDefault(picumPhoto.author, "Ảnh từ Picsum")
                         PhotoEntity(url = url, title = title)
                     }
