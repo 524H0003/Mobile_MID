@@ -207,15 +207,32 @@ class PhotoBenchmarkTest {
     }
 
     private fun saveResult(code: String, name: String, dur: Long, detailDur: Long, ramBefore: Long, ramAfter: Long, native: Long) {
-        val line = PerformanceMonitor.getCsvLine("[$code] $name", dur, detailDur, ramBefore, ramAfter, native) + "\n"
-        val header = PerformanceMonitor.getCsvHeader() + "\n"
-        val dir = context.getExternalFilesDir(null) ?: context.filesDir
-        try {
-            if (!dir.exists()) dir.mkdirs()
-            val file = java.io.File(dir, "benchmark_results.csv")
-            if (!file.exists()) file.writeText(header)
-            file.appendText(line)
-        } catch (_: Exception) {}
+        val csvLine = PerformanceMonitor.getCsvLine(
+            "[$code] $name", dur, detailDur, ramBefore, ramAfter, native
+        ) + "\n"
+        val csvHeader = PerformanceMonitor.getCsvHeader() + "\n"
+
+        val candidateDirs = listOfNotNull(
+            android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS),
+            context.getExternalFilesDir(null),
+            context.filesDir
+        ).map { runCatching { it.canonicalFile }.getOrDefault(it) }
+            .distinctBy { it.absolutePath }
+
+        for (dir in candidateDirs) {
+            try {
+                if (!dir.exists()) dir.mkdirs()
+                val csvFile = java.io.File(dir, "benchmark_results.csv")
+
+                if (!csvFile.exists()) csvFile.writeText(csvHeader)
+                csvFile.appendText(csvLine)
+
+                println("📄 [ĐÃ XUẤT BÁO CÁO]: ${csvFile.absolutePath}")
+                break
+            } catch (e: Exception) {
+                println("⚠️ Không thể ghi file vào ${dir.absolutePath}: ${e.message}")
+            }
+        }
     }
 
     private fun setNetworkState(enabled: Boolean) {
