@@ -182,7 +182,7 @@ class MainActivity : AppCompatActivity() {
                 val count = countStr.toIntOrNull() ?: 1
                 val size = sizeStr.toIntOrNull() ?: 200
 
-                viewModel.addRandomPicsumPhotos(count, size)
+                viewModel.addRandomPhotos(count, size)
                 Toast.makeText(this, "Đang thêm $count ảnh ngẫu nhiên (${size}x$size)...", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("Hủy", null)

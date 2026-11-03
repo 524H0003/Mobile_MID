@@ -52,24 +52,23 @@ class PhotoViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun addRandomPicsumPhotos(count: Int, size: Int) {
+    fun addRandomPhotos(count: Int, size: Int) {
         val safeCount = count.coerceIn(1, 1000)
         val safeSize = size.coerceIn(50, 4000)
         viewModelScope.launch {
             _isLoading.value = true
             try {
                 withContext(Dispatchers.IO) {
-                    for (i in 0 until safeCount) {
-                        val randomId = (0..1084).random()
-                        val url = "http://localhost:8686/id/$randomId/$safeSize/$safeSize"
-                        val photo = PhotoEntity(
-                            url = url,
-                            title = "Ảnh ngẫu nhiên #$randomId (${safeSize}x$safeSize)"
-                        )
-                        repository.insertPhoto(photo)
+                    val response = apiService.getPhotos(page = 1, limit = safeCount)
+                    if (response.isSuccessful && response.body() != null) {
+                        val photos = response.body()!!.map { picumPhoto ->
+                            val url = picumPhoto.downloadUrl
+                            val title = orDefault(picumPhoto.author, "Ảnh từ Picsum")
+                            PhotoEntity(url = url, title = title)
+                        }
+                        photos.forEach { repository.insertPhoto(it) }
                     }
                 }
-                PerformanceMonitor.logMemoryUsage()
             } finally {
                 _isLoading.value = false
             }

@@ -60,10 +60,33 @@ class PhotoBenchmarkTest {
         }
     }
 
+    private fun captureScreenshot(screenshotName: String) {
+        try {
+            val candidateDirs = listOfNotNull(
+                android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS),
+                context.getExternalFilesDir(null),
+                context.filesDir
+            ).map { runCatching { it.canonicalFile }.getOrDefault(it) }
+                .distinctBy { it.absolutePath }
+
+            for (dir in candidateDirs) {
+                if (!dir.exists()) dir.mkdirs()
+                val screenshotFile = java.io.File(dir, "${screenshotName}.png")
+                val success = uiDevice.takeScreenshot(screenshotFile)
+                if (success) {
+                    println("📸 [ĐÃ CHỤP MÀN HÌNH]: ${screenshotFile.absolutePath}")
+                    break
+                }
+            }
+        } catch (e: Exception) {
+            println("⚠️ Không thể chụp màn hình: ${e.message}")
+        }
+    }
+
     private fun populateDatabase(
         count: Int,
         size: Int,
-        baseUrl: String = "http://localhost:8686/id"
+        baseUrl: String = "http://10.0.2.2/id"
     ) {
         val database = AppDatabase.getDatabase(context)
         val photoDao = database.photoDao()
@@ -122,7 +145,7 @@ class PhotoBenchmarkTest {
         scenarioName: String,
         count: Int,
         size: Int,
-        baseUrl: String = "http://localhost:8686/id",
+        baseUrl: String = "http://10.0.2.2/id",
         saveToCsv: Boolean = true
     ): Long {
         PerformanceMonitor.resetMetrics()
@@ -158,6 +181,10 @@ class PhotoBenchmarkTest {
                     println("⚠️ Cảnh báo: Vẫn còn ảnh đang tải ở một số vị trí")
                 }
 
+                if (scenarioCode == "TC05") {
+                    captureScreenshot("tc05_offline_mode_list")
+                }
+
                 onView(withId(R.id.rvPhotos))
                     .perform(RecyclerViewActions.scrollToPosition<RecyclerView.ViewHolder>(0))
                 Thread.sleep(500)
@@ -174,6 +201,10 @@ class PhotoBenchmarkTest {
                     }
                 }
                 Thread.sleep(2000)
+
+                if (scenarioCode == "TC05") {
+                    captureScreenshot("tc05_offline_mode_detail")
+                }
             }
         }
 
@@ -380,7 +411,7 @@ class PhotoBenchmarkTest {
             "URL ảnh lỗi hoặc máy chủ chậm",
             count = 10,
             size = 500,
-            baseUrl = "http://localhost:8686/invalid_404_url",
+            baseUrl = "http://10.0.2.2/invalid_404_url",
             saveToCsv = true
         )
         assertTrue("TC06 thực thi thành công", duration > 0)
