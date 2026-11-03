@@ -33,6 +33,9 @@ object PerformanceMonitor {
     private val totalBitmapMemoryBytes = AtomicLong(0)
     private val maxSingleBitmapBytes = AtomicLong(0)
 
+    // CPU & Thread metrics tracking
+    private val peakThreadCount = AtomicInteger(0)
+
     /**
      * Resets all accumulated metrics for scenario-isolated benchmarking.
      */
@@ -48,7 +51,17 @@ object PerformanceMonitor {
         unknownSourceLoads.set(0)
         totalBitmapMemoryBytes.set(0)
         maxSingleBitmapBytes.set(0)
+        peakThreadCount.set(0)
         Log.i(TAG, "[TELEMETRY] All performance metrics have been reset.")
+    }
+
+    private fun sampleThreadCount() {
+        val current = Thread.activeCount()
+        var currPeak = peakThreadCount.get()
+        while (current > currPeak) {
+            if (peakThreadCount.compareAndSet(currPeak, current)) break
+            currPeak = peakThreadCount.get()
+        }
     }
 
     /**
@@ -59,11 +72,11 @@ object PerformanceMonitor {
             val window: Window = activity.window
             val handler = Handler(Looper.getMainLooper())
             window.addOnFrameMetricsAvailableListener({ _, frameMetrics, _ ->
+                sampleThreadCount()
                 val durationNs = frameMetrics.getMetric(FrameMetrics.TOTAL_DURATION)
                 val durationMs = durationNs / 1_000_000f
                 if (durationMs > 1.0f) {
                     totalFrames.incrementAndGet()
-                    // Standard Android Vitals threshold for noticeable frame drop (jank > 33.33ms)
                     if (durationMs > 33.33f) {
                         jankCount.incrementAndGet()
                     }
@@ -76,7 +89,7 @@ object PerformanceMonitor {
                 ) {
                     Log.i(
                         TAG,
-                        "[TELEMETRY] Frame stats: ${jankCount.get()} jank / ${totalFrames.get()} total frames"
+                        "[TELEMETRY] Frame stats: ${jankCount.get()} jank / ${totalFrames.get()} total frames, Peak Threads: ${peakThreadCount.get()}"
                     )
                 }
             }, handler)
@@ -92,6 +105,7 @@ object PerformanceMonitor {
         dataSourceName: String = "UNKNOWN",
         bitmapAllocationBytes: Long = 0L
     ) {
+        sampleThreadCount()
         if (durationMs >= 0) {
             totalImageLoadTimeMs.addAndGet(durationMs)
             imageLoadCount.incrementAndGet()
@@ -118,6 +132,7 @@ object PerformanceMonitor {
      * Prints a comprehensive session telemetry report matching all project PDF requirements.
      */
     fun logSessionSummary() {
+        sampleThreadCount()
         val total = totalFrames.get()
         val janks = jankCount.get()
         val jankPercent = if (total > 0) (janks.toFloat() / total * 100) else 0f
@@ -140,6 +155,8 @@ object PerformanceMonitor {
         val totalBitmapMb = totalBitmapMemoryBytes.get().toDouble() / (1024 * 1024)
         val maxBitmapMb = maxSingleBitmapBytes.get().toDouble() / (1024 * 1024)
         val avgBitmapMb = if (count > 0) totalBitmapMb / count else 0.0
+        val peakThreads = peakThreadCount.get()
+        val cpuTimeMs = android.os.Process.getElapsedCpuTime()
 
         Log.i(TAG, "==========================================================")
         Log.i(TAG, "===        BÁO CÁO THÔNG SỐ PHIÊN LÀM VIỆC THỰC TẾ      ===")
@@ -149,6 +166,8 @@ object PerformanceMonitor {
         Log.i(TAG, String.format("%-36s : %.2f%%", "Độ mượt mà rendering", if (smoothness < 0) 0f else smoothness))
         Log.i(TAG, String.format("%-36s : %d MB / %d MB", "RAM JVM Heap sử dụng", usedMemMb, maxMemMb))
         Log.i(TAG, String.format("%-36s : %d MB", "RAM Native Heap cấp phát", nativeHeapMb))
+        Log.i(TAG, String.format("%-36s : %d", "Peak Thread Count (Luồng đỉnh)", peakThreads))
+        Log.i(TAG, String.format("%-36s : %d ms", "CPU Elapsed Time", cpuTimeMs))
         Log.i(TAG, String.format("%-36s : %d ảnh", "Số lượng ảnh đã tải", count))
         Log.i(TAG, String.format("%-36s : %.2f ms", "Thời gian tải ảnh trung bình", avgLoadTime))
         Log.i(TAG, "--- BỘ NHỚ ĐỆM & NGUỒN TẢI (CACHE METRICS) ---")
@@ -167,13 +186,14 @@ object PerformanceMonitor {
      * Returns CSV header string for data export.
      */
     fun getCsvHeader(): String {
-        return "Timestamp,Scenario,TotalDurationMs,DetailDurationMs,RamBeforeMb,RamAfterMb,NativeHeapMb,TotalFrames,JankFrames,JankPercent,SmoothnessPercent,ImagesLoaded,AvgLoadTimeMs,MemoryCacheHits,DiskCacheHits,NetworkLoads,CacheHitRatioPercent,TotalBitmapMb,MaxBitmapMb,AvgBitmapMb"
+        return "Timestamp,Scenario,TotalDurationMs,DetailDurationMs,RamBeforeMb,RamAfterMb,NativeHeapMb,TotalFrames,JankFrames,JankPercent,SmoothnessPercent,ImagesLoaded,AvgLoadTimeMs,MemoryCacheHits,DiskCacheHits,NetworkLoads,CacheHitRatioPercent,TotalBitmapMb,MaxBitmapMb,AvgBitmapMb,PeakThreadCount,CpuTimeMs"
     }
 
     /**
      * Returns CSV data row string corresponding to getCsvHeader().
      */
     fun getCsvLine(scenarioName: String, durationMs: Long, detailDurationMs: Long, ramBeforeMb: Long, ramAfterMb: Long, nativeHeapMb: Long): String {
+        sampleThreadCount()
         val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(java.util.Date())
         val total = totalFrames.get()
         val janks = jankCount.get()
@@ -192,15 +212,18 @@ object PerformanceMonitor {
         val totalBitmapMb = totalBitmapMemoryBytes.get().toDouble() / (1024 * 1024)
         val maxBitmapMb = maxSingleBitmapBytes.get().toDouble() / (1024 * 1024)
         val avgBitmapMb = if (count > 0) totalBitmapMb / count else 0.0
+        val peakThreads = peakThreadCount.get()
+        val cpuTimeMs = android.os.Process.getElapsedCpuTime()
 
         return String.format(
             Locale.US,
-            "\"%s\",\"%s\",%d,%d,%d,%d,%d,%d,%d,%.2f,%.2f,%d,%.2f,%d,%d,%d,%.2f,%.2f,%.2f,%.2f",
+            "\"%s\",\"%s\",%d,%d,%d,%d,%d,%d,%d,%.2f,%.2f,%d,%.2f,%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%d,%d",
             timestamp, scenarioName, durationMs, detailDurationMs, ramBeforeMb, ramAfterMb, nativeHeapMb,
             total, janks, jankPercent, if (smoothness < 0) 0f else smoothness,
             count, avgLoadTime,
             memHits, diskHits, netLoads, cacheHitRatio,
-            totalBitmapMb, maxBitmapMb, avgBitmapMb
+            totalBitmapMb, maxBitmapMb, avgBitmapMb,
+            peakThreads, cpuTimeMs
         )
     }
 
