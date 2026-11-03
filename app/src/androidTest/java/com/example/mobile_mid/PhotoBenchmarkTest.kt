@@ -78,7 +78,7 @@ class PhotoBenchmarkTest {
             InstrumentationRegistry.getInstrumentation().runOnMainSync {
                 val holder = recyclerView.findViewHolderForAdapterPosition(i) as? PhotoAdapter.PhotoViewHolder
                 val pb = holder?.binding?.imageWithProgress?.binding?.progressBar
-                var attempts = 10
+                var attempts = 3
                 while (pb != null && pb.visibility == View.VISIBLE && attempts > 0) {
                     Thread.sleep(300)
                     attempts--
