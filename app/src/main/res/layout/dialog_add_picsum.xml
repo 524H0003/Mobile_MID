@@ -35,7 +35,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:hint="Kích thước (px, thay thế 200)">
+            android:hint="Kích thước (px)">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etPicsumSize"

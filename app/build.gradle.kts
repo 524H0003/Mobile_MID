@@ -45,19 +45,26 @@ dependencies {
     implementation(libs.androidx.uiautomator)
     implementation(libs.material)
 
-    // Coil - Image loading library
-    implementation(libs.coil)
-    implementation(libs.okhttp)
-
     // Room
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
 
+    // Coil - Image loading library
+    implementation(libs.coil)
+    implementation(libs.okhttp)
+
     // Lifecycle / ViewModel
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
 
+    // Network
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.moshi)
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging)
+    implementation(libs.moshi)
+    implementation(libs.moshi.kotlin)
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")

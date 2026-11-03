@@ -6,7 +6,6 @@ Dự án demo Android để benchmark hiệu năng việc tải và hiển thị
 
 - Android Studio Hedgehog (2023.1.1) trở lên
 - Android SDK 37
-- Docker và Docker Compose
 - Thiết bị Android hoặc emulator đã bật Debug (adb)
 
 ## Cài đặt nhanh
@@ -14,25 +13,6 @@ Dự án demo Android để benchmark hiệu năng việc tải và hiển thị
 ```bash
 # Build ứng dụng Android
 ./gradlew assembleDebug
-```
-
-## Khởi động Image Server bằng Docker Compose
-
-```bash
-docker-compose up -d
-```
-
-Docker sẽ:
-
-- Tạo container `local-image-provider`
-- Cài đặt fontconfig và dependencies
-- Expose cổng 8686
-- Lưu cache vào thư mục `./cache`
-
-Để dừng server:
-
-```bash
-docker-compose down
 ```
 
 ## Chạy Benchmark Test
@@ -47,23 +27,7 @@ docker-compose down
    adb devices
    ```
 
-### Bước 2: Cấu hình ADB Reverse
-
-Để thiết bị Android truy cập được image server trên máy host:
-
-```bash
-adb reverse tcp:8686 tcp:8686
-```
-
-> **Lưu ý**: Lệnh này cần thiết bị đã được kết nối và đang ở chế độ Debug.
-
-### Bước 3: Cài đặt ứng dụng trên thiết bị
-
-```bash
-./gradlew installDebug
-```
-
-### Bước 4: Chạy các test case benchmark
+### Bước 2: Chạy các test case benchmark
 
 Chạy tất cả test case benchmark:
 
@@ -71,31 +35,17 @@ Chạy tất cả test case benchmark:
 ./gradlew connectedAndroidTest
 ```
 
-### Bước 5: Lấy kết quả benchmark
+### Bước 3: Lấy kết quả benchmark
 
 Sau khi test hoàn tất, lấy file kết quả:
 
 ```bash
 adb pull /sdcard/Download/benchmark_results.csv .
+adb pull /sdcard/Download/tc05_offline_mode_list.png .
+adb pull /sdcard/Download/tc05_offline_mode_detail.png .
 ```
 
-Mở file `benchmark_results.csv` để xem các chỉ số:
-
-- Thời gian chạy test case tổng cộng
-- Thời gian xem ảnh (DetailActivity)
-- RAM Heap sử dụng trước và sau khi chạy
-- Native Heap cấp phát
-
-## Test Case có sẵn
-
-| Test Case | Số lượng ảnh | Kích thước ảnh |
-| ----------- | ------------- | ---------------- |
-| `test_10_photos_size_small` | 10 | 500x500 |
-| `test_10_photos_size_large` | 10 | 2000x2000 |
-| `test_100_photos_size_small` | 100 | 500x500 |
-| `test_100_photos_size_large` | 100 | 2000x2000 |
-| `test_1000_photos_size_small` | 1000 | 500x500 |
-| `test_1000_photos_size_large` | 1000 | 2000x2000 |
+Mở file `benchmark_results.csv` để xem các chỉ số.
 
 ## Lưu ý quan trọng
 

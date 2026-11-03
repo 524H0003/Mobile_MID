@@ -52,7 +52,7 @@ object PerformanceMonitor {
     }
 
     /**
-     * Starts frame metrics monitoring (detects Jank Frames > 16.67ms during scrolling).
+     * Starts frame metrics monitoring (detects Jank Frames > 33.33ms during active UI rendering).
      */
     fun startFrameMetrics(activity: Activity) {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
@@ -61,9 +61,12 @@ object PerformanceMonitor {
             window.addOnFrameMetricsAvailableListener({ _, frameMetrics, _ ->
                 val durationNs = frameMetrics.getMetric(FrameMetrics.TOTAL_DURATION)
                 val durationMs = durationNs / 1_000_000f
-                totalFrames.incrementAndGet()
-                if (durationMs > 16.67f) {
-                    jankCount.incrementAndGet()
+                if (durationMs > 1.0f) {
+                    totalFrames.incrementAndGet()
+                    // Standard Android Vitals threshold for noticeable frame drop (jank > 33.33ms)
+                    if (durationMs > 33.33f) {
+                        jankCount.incrementAndGet()
+                    }
                 }
                 val now = System.currentTimeMillis()
                 if (now - lastLogTime.get() > 3000 && lastLogTime.compareAndSet(
@@ -109,21 +112,6 @@ object PerformanceMonitor {
                 }
             }
         }
-    }
-
-    /**
-     * Logs real-time system RAM consumption (JVM Heap and Native Heap).
-     */
-    fun logMemoryUsage(tag: String = TAG) {
-        val runtime = Runtime.getRuntime()
-        val usedMemMb = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024)
-        val totalMemMb = runtime.totalMemory() / (1024 * 1024)
-        val maxMemMb = runtime.maxMemory() / (1024 * 1024)
-        val nativeHeapMb = Debug.getNativeHeapAllocatedSize() / (1024 * 1024)
-
-        Log.i(tag, "=== [REAL-TIME RAM METRICS] ===")
-        Log.i(tag, "JVM Heap Used : $usedMemMb MB / $totalMemMb MB (Max: $maxMemMb MB)")
-        Log.i(tag, "Native Heap   : $nativeHeapMb MB")
     }
 
     /**

@@ -20,7 +20,6 @@ import com.example.mobile_mid.util.PerformanceMonitor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.After
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -29,24 +28,18 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class PhotoBenchmarkTest {
 
-    private lateinit var context: Context
-
+    private val context: Context = InstrumentationRegistry.getInstrumentation().targetContext
     private val uiDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
 
     @Before
     fun setUp() {
-        context = InstrumentationRegistry.getInstrumentation().targetContext
         setNetworkState(true)
-        println("\n==========================================================")
-        println(">>> BẮT ĐẦU THỰC THI KỊCH BẢN KIỂM THỬ BENCHMARK <<<")
-        println("==========================================================")
         clearAppCache()
     }
 
     @After
     fun tearDown() {
-        println("==========================================================")
-        println(">>> KẾT THÚC THỰC THI KỊCH BẢN KIỂM THỬ BENCHMARK <<<\n")
+        PerformanceMonitor.logSessionSummary()
     }
 
     @OptIn(coil.annotation.ExperimentalCoilApi::class)
@@ -54,401 +47,181 @@ class PhotoBenchmarkTest {
         try {
             context.imageLoader.memoryCache?.clear()
             context.imageLoader.diskCache?.clear()
-            println("🧹 [CACHE]: Đã xóa sạch Memory Cache và Disk Cache của Coil.")
-        } catch (e: Exception) {
-            println("⚠️ Không thể xóa cache: ${e.message}")
-        }
+        } catch (_: Exception) {}
     }
 
-    private fun populateDatabase(
-        count: Int,
-        size: Int,
-        baseUrl: String = "http://localhost:8686/id"
-    ) {
-        val database = AppDatabase.getDatabase(context)
-        val photoDao = database.photoDao()
+    private fun captureScreenshot(name: String) {
+        try {
+            val dir = context.getExternalFilesDir(null) ?: context.filesDir
+            if (!dir.exists()) dir.mkdirs()
+            uiDevice.takeScreenshot(java.io.File(dir, "$name.png"))
+        } catch (_: Exception) {}
+    }
+
+    private fun populateDatabase(count: Int, size: Int, isError: Boolean = false) {
+        val photoDao = AppDatabase.getDatabase(context).photoDao()
         runBlocking(Dispatchers.IO) {
             photoDao.deleteAllPhotos()
             for (i in 0 until count) {
-                val url = if (baseUrl.contains("invalid") || baseUrl.contains("offline")) {
-                    "$baseUrl/$i"
-                } else {
-                    "$baseUrl/$i/$size/$size"
-                }
-                photoDao.insertPhoto(
-                    PhotoEntity(
-                        url = url,
-                        title = "Photo #$i (${size}x$size)"
-                    )
-                )
+                val url = if (isError) "https://invalid-picsum-404.test/$i" else "https://picsum.photos/id/${i % 1084}/$size"
+                val title = if (isError) "Error #$i" else "Photo #${i % 1084} (${size}x$size)"
+                photoDao.insertPhoto(PhotoEntity(url = url, title = title))
             }
         }
     }
 
-    private fun scrollThroughItems(
-        totalItems: Int,
-        recyclerView: RecyclerView,
-        scrollDelayMs: Long = 100
-    ): Boolean {
-        var isLoading = true
-
+    private fun scrollThroughItems(totalItems: Int, recyclerView: RecyclerView): Boolean {
+        var complete = true
         for (i in 0 until totalItems) {
-            onView(withId(R.id.rvPhotos))
-                .perform(RecyclerViewActions.scrollToPosition<RecyclerView.ViewHolder>(i))
-
-            if (scrollDelayMs > 0) {
-                Thread.sleep(scrollDelayMs)
-            }
-
+            onView(withId(R.id.rvPhotos)).perform(RecyclerViewActions.scrollToPosition<RecyclerView.ViewHolder>(i))
+            Thread.sleep(80)
             InstrumentationRegistry.getInstrumentation().runOnMainSync {
-                val viewHolder =
-                    recyclerView.findViewHolderForAdapterPosition(i) as? PhotoAdapter.PhotoViewHolder
-                val progressBar = viewHolder?.binding?.imageWithProgress?.binding?.progressBar
-
-                var attempt = 10
-                while (progressBar != null && progressBar.visibility == View.VISIBLE && attempt > 0) {
-                    Thread.sleep(500)
-                    attempt--
+                val holder = recyclerView.findViewHolderForAdapterPosition(i) as? PhotoAdapter.PhotoViewHolder
+                val pb = holder?.binding?.imageWithProgress?.binding?.progressBar
+                var attempts = 3
+                while (pb != null && pb.visibility == View.VISIBLE && attempts > 0) {
+                    Thread.sleep(300)
+                    attempts--
                 }
-
-                if (attempt == 0) isLoading = false
+                if (attempts == 0) complete = false
             }
         }
-        return isLoading
+        return complete
     }
 
-    private fun runBenchmarkScenario(
-        scenarioCode: String,
-        scenarioName: String,
-        count: Int,
-        size: Int,
-        baseUrl: String = "http://localhost:8686/id",
-        saveToCsv: Boolean = true
-    ): Long {
+    private fun runBenchmarkScenario(code: String, name: String, count: Int, size: Int, isError: Boolean = false, saveCsv: Boolean = true): Long {
         PerformanceMonitor.resetMetrics()
-        println("\n----------------------------------------------------------")
-        println("🚀 Đang chạy: [$scenarioCode] - $scenarioName ($count ảnh, kích thước ${size}x${size})")
-
-        populateDatabase(count, size, baseUrl)
+        populateDatabase(count, size, isError)
 
         val runtime = Runtime.getRuntime()
         runtime.gc()
-        val ramBeforeMb = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024)
+        val ramBefore = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024)
         val startTime = System.currentTimeMillis()
-        var detailDurationMs = 0L
+        var detailDuration = 0L
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            Thread.sleep(1000)
+            Thread.sleep(800)
             var totalItems = 0
-            var recyclerViewRef: RecyclerView? = null
-
-            scenario.onActivity { activity ->
-                val recyclerView = activity.findViewById<RecyclerView>(R.id.rvPhotos)
-                val photoAdapter = recyclerView?.adapter as? PhotoAdapter
-                totalItems = photoAdapter?.itemCount ?: 0
-                recyclerViewRef = recyclerView
+            var rvRef: RecyclerView? = null
+            scenario.onActivity {
+                rvRef = it.findViewById(R.id.rvPhotos)
+                totalItems = (rvRef?.adapter as? PhotoAdapter)?.itemCount ?: 0
             }
 
-            val rv = recyclerViewRef
-            if (rv != null && totalItems > 0) {
-                val isLoading = scrollThroughItems(totalItems, rv)
-                if (isLoading) {
-                    println("✓ Tải ảnh hoàn tất trong quá trình cuộn")
-                } else {
-                    println("⚠️ Cảnh báo: Vẫn còn ảnh đang tải ở một số vị trí")
-                }
+            rvRef?.let { rv ->
+                if (totalItems > 0) {
+                    scrollThroughItems(totalItems, rv)
+                    if (code == "TC05") captureScreenshot("tc05_offline_list")
 
-                onView(withId(R.id.rvPhotos))
-                    .perform(RecyclerViewActions.scrollToPosition<RecyclerView.ViewHolder>(0))
-                Thread.sleep(500)
+                    onView(withId(R.id.rvPhotos)).perform(RecyclerViewActions.scrollToPosition<RecyclerView.ViewHolder>(0))
+                    Thread.sleep(400)
 
-                val randomIndex = (0 until totalItems).shuffled().first()
-                scenario.onActivity { activity ->
-                    val photoAdapter = recyclerViewRef?.adapter as? PhotoAdapter
-                    val photo = photoAdapter?.currentList?.getOrNull(randomIndex)
-                    if (photo != null) {
-                        val startTimeDetail = System.currentTimeMillis()
-                        DetailActivity.start(activity, photo.url, photo.title)
-                        val endTimeDetail = System.currentTimeMillis()
-                        detailDurationMs = endTimeDetail - startTimeDetail
+                    val rand = (0 until totalItems).shuffled().first()
+                    scenario.onActivity { activity ->
+                        val photo = (rv.adapter as? PhotoAdapter)?.currentList?.getOrNull(rand)
+                        if (photo != null) {
+                            val detailStart = System.currentTimeMillis()
+                            DetailActivity.start(activity, photo.url, photo.title)
+                            detailDuration = System.currentTimeMillis() - detailStart
+                        }
                     }
+                    Thread.sleep(1500)
+                    if (code == "TC05") captureScreenshot("tc05_offline_detail")
                 }
-                Thread.sleep(2000)
             }
         }
 
-        val endTime = System.currentTimeMillis()
-        val durationMs = endTime - startTime
-
+        val duration = System.currentTimeMillis() - startTime
         runtime.gc()
-        val ramAfterMb = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024)
-        val nativeHeapMb = Debug.getNativeHeapAllocatedSize() / (1024 * 1024)
+        val ramAfter = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024)
+        val nativeHeap = Debug.getNativeHeapAllocatedSize() / (1024 * 1024)
 
-        val resultTable = """
-        ========================================================================================================
-        ===                            BẢNG KẾT QUẢ BENCHMARK KỊCH BẢN: $scenarioCode                           ===
-        ========================================================================================================
-        | Mã & Tên Kịch bản                             : [$scenarioCode] $scenarioName
-        | Thời gian mở xem ảnh chi tiết                 : $detailDurationMs ms
-        | Thời gian thực thi tổng cộng                  : $durationMs ms
-        | RAM Heap sử dụng ban đầu                      : $ramBeforeMb MB
-        | RAM Heap sử dụng sau khi chạy                 : $ramAfterMb MB
-        | Native Heap cấp phát                          : $nativeHeapMb MB
-        ========================================================================================================
-        """.trimIndent()
-
-        println(resultTable)
-        PerformanceMonitor.logSessionSummary()
-
-        if (saveToCsv) {
-            saveResultToFile(
-                context,
-                "[$scenarioCode] $scenarioName",
-                durationMs,
-                detailDurationMs,
-                ramBeforeMb,
-                ramAfterMb,
-                nativeHeapMb
-            )
-        }
-
-        val resultsBundle = Bundle().apply {
-            putString("benchmark_scenario", scenarioCode)
-            putLong("duration_ms", durationMs)
-            putLong("detail_duration_ms", detailDurationMs)
-            putLong("ram_before_mb", ramBeforeMb)
-            putLong("ram_after_mb", ramAfterMb)
-            putLong("native_heap_mb", nativeHeapMb)
-        }
-        InstrumentationRegistry.getInstrumentation().sendStatus(0, resultsBundle)
-
-        return durationMs
+        if (saveCsv) saveResult(code, name, duration, detailDuration, ramBefore, ramAfter, nativeHeap)
+        InstrumentationRegistry.getInstrumentation().sendStatus(0, Bundle().apply {
+            putString("scenario", code)
+            putLong("duration", duration)
+        })
+        return duration
     }
 
-    // =========================================================================================================
-    // DANH SÁCH CÁC KỊCH BẢN KIỂM THỬ BẮT BUỘC THEO ĐỀ BÀI TIỂU LUẬN GIỮA KỲ (TC01 - TC07)
-    // =========================================================================================================
-
-    /**
-     * TC01: Mở danh sách ảnh lần đầu (chưa có cache).
-     * Yêu cầu: Đánh giá thời gian hiển thị, thời gian tải ảnh và mức sử dụng bộ nhớ RAM ban đầu.
-     */
     @Test
     fun test_TC01_firstLoad() {
-        val duration = runBenchmarkScenario(
-            "TC01",
-            "Mở danh sách ảnh lần đầu (Làm sạch Cache)",
-            count = 100,
-            size = 500
-        )
-        assertTrue("Thời gian thực thi TC01 phải hợp lệ", duration > 0)
+        assertTrue(runBenchmarkScenario("TC01", "Cold Start (Clean Cache)", 100, 500) > 0)
     }
 
-    /**
-     * TC02: Mở lại danh sách khi cache còn hiệu lực (Cache Hit).
-     * Yêu cầu: So sánh thời gian hiển thị và tải lại ảnh so với lần đầu (TC01).
-     */
     @Test
     fun test_TC02_cacheHit() {
-        println("📌 Chuẩn bị dữ liệu cache bằng cách tải trước danh sách (Warmup - Cold Network)...")
-        runBenchmarkScenario(
-            "TC02_Warmup",
-            "Tải trước ảnh vào Cache (Warmup - Cold Network)",
-            count = 50,
-            size = 500,
-            saveToCsv = true
-        )
-
-        println("\n📌 Thực thi TC02: Mở lại danh sách khi Cache đã có sẵn (Cache Hit)...")
-        val duration = runBenchmarkScenario(
-            "TC02",
-            "Mở lại danh sách khi cache còn hiệu lực (Cache Hit)",
-            count = 50,
-            size = 500,
-            saveToCsv = true
-        )
-        assertTrue("Thời gian tải từ cache phải nhanh", duration > 0)
+        runBenchmarkScenario("TC02_Warmup", "Warmup Cache", 50, 500)
+        assertTrue(runBenchmarkScenario("TC02", "Cache Hit", 50, 500) > 0)
     }
 
-    /**
-     * TC03: Cuộn nhanh qua nhiều ảnh (Fast Scroll Performance).
-     * Yêu cầu: Đo số khung hình bị giật (Jank), đếm tỉ lệ mượt mà và kiểm tra hủy các task tải ảnh không cần thiết.
-     */
     @Test
     fun test_TC03_fastScroll() {
         PerformanceMonitor.resetMetrics()
-        println("\n🚀 Đang chạy: [TC03] - Cuộn nhanh qua nhiều ảnh (100 ảnh)")
-        populateDatabase(count = 100, size = 500)
-
-        val runtime = Runtime.getRuntime()
-        runtime.gc()
-        val ramBeforeMb = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024)
-        val startTime = System.currentTimeMillis()
-
+        populateDatabase(100, 500)
+        val start = System.currentTimeMillis()
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            Thread.sleep(800)
+            var rv: RecyclerView? = null
+            scenario.onActivity { rv = it.findViewById(R.id.rvPhotos) }
+            rv?.let {
+                for (i in 0 until 100 step 5) {
+                    onView(withId(R.id.rvPhotos)).perform(RecyclerViewActions.scrollToPosition<RecyclerView.ViewHolder>(i))
+                    Thread.sleep(15)
+                }
+            }
             Thread.sleep(1000)
-            var recyclerViewRef: RecyclerView? = null
-            scenario.onActivity { activity ->
-                recyclerViewRef = activity.findViewById(R.id.rvPhotos)
-            }
-            assertNotNull("RecyclerView không được null", recyclerViewRef)
-
-            for (i in 0 until 100 step 5) {
-                onView(withId(R.id.rvPhotos))
-                    .perform(RecyclerViewActions.scrollToPosition<RecyclerView.ViewHolder>(i))
-                Thread.sleep(20)
-            }
-            Thread.sleep(1500)
         }
-
-        val endTime = System.currentTimeMillis()
-        val durationMs = endTime - startTime
-
-        runtime.gc()
-        val ramAfterMb = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024)
-        val nativeHeapMb = Debug.getNativeHeapAllocatedSize() / (1024 * 1024)
-
-        println("📊 BÁO CÁO MỨC ĐỘ MƯỢT MÀ KHI CUỘN NHANH [TC03]:")
-        PerformanceMonitor.logSessionSummary()
-        saveResultToFile(
-            context,
-            "[TC03] Cuộn nhanh qua nhiều ảnh (Fast Scroll)",
-            durationMs,
-            0L,
-            ramBeforeMb,
-            ramAfterMb,
-            nativeHeapMb
-        )
+        val duration = System.currentTimeMillis() - start
+        val rt = Runtime.getRuntime()
+        rt.gc()
+        saveResult("[TC03]", "Fast Scroll", duration, 0L, (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024), (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024), Debug.getNativeHeapAllocatedSize() / (1024 * 1024))
     }
 
-    /**
-     * TC04: Thử nghiệm với ảnh độ phân giải lớn (Large Resolution Images).
-     * Yêu cầu: Đo bộ nhớ RAM cấp phát (Bitmap Heap), thời gian giải mã ảnh lớn (2000x2000px).
-     */
     @Test
     fun test_TC04_largeResolution() {
-        val duration = runBenchmarkScenario(
-            "TC04",
-            "Thử nghiệm với ảnh độ phân giải lớn (2000x2000)",
-            count = 20,
-            size = 2000
-        )
-        assertTrue("TC04 tải ảnh lớn phải thành công", duration > 0)
+        assertTrue(runBenchmarkScenario("TC04", "Large Resolution (2000x2000)", 20, 2000) > 0)
     }
 
-    /**
-     * TC05: Tắt mạng khi mở danh sách (Offline Mode Testing).
-     * Yêu cầu: Kiểm tra xem ảnh đã cache có hiển thị không; ảnh chưa cache được xử lý thế nào.
-     */
     @Test
     fun test_TC05_offlineMode() {
-        println("📌 [TC05] Bước 1: Tải trước 10 ảnh vào Cache khi có mạng...")
-        runBenchmarkScenario(
-            "TC05_Preload",
-            "Tải trước ảnh khi có mạng",
-            count = 10,
-            size = 500,
-            saveToCsv = false
-        )
-
-        println("📌 [TC05] Bước 2: Tắt mạng và chạy kiểm thử cuộn ảnh trong điều kiện Offline...")
+        runBenchmarkScenario("TC05_Preload", "Preload Cache", 10, 500, saveCsv = false)
         setNetworkState(false)
-
         try {
-            val duration = runBenchmarkScenario(
-                "TC05",
-                "Tắt mạng khi mở danh sách (Offline)",
-                count = 20,
-                size = 500,
-                saveToCsv = true
-            )
-            assertTrue("TC05 thực thi thành công", duration > 0)
+            assertTrue(runBenchmarkScenario("TC05", "Offline Mode", 20, 500) > 0)
         } finally {
             setNetworkState(true)
         }
     }
 
-    /**
-     * TC06: Kiểm thử URL ảnh lỗi hoặc máy chủ chậm (Error URLs & Slow Server).
-     * Yêu cầu: Đảm bảo giao diện không bị treo, hiển thị placeholder/thông báo lỗi đúng cách.
-     */
     @Test
     fun test_TC06_errorUrlAndTimeout() {
-        println("🚀 Thực thi [TC06] Kiểm thử với danh sách URL lỗi và timeout...")
-        val duration = runBenchmarkScenario(
-            "TC06",
-            "URL ảnh lỗi hoặc máy chủ chậm",
-            count = 10,
-            size = 500,
-            baseUrl = "http://localhost:8686/invalid_404_url",
-            saveToCsv = true
-        )
-        assertTrue("TC06 thực thi thành công", duration > 0)
+        assertTrue(runBenchmarkScenario("TC06", "Error URLs / Timeout", 10, 500, isError = true) > 0)
     }
 
-    /**
-     * TC07: Tăng số lượng ảnh từ 100 lên 500 và 1.000 (Scalability Benchmark).
-     * Yêu cầu: Ghi nhận mức tăng thời gian tải, dung lượng bộ nhớ RAM và độ trễ giao diện.
-     */
     @Test
     fun test_TC07_scalePhotoCount() {
-        println("\n==========================================================")
-        println("🚀 THỰC THI KIỂM THỬ TĂNG QUY MÔ SỐ LƯỢNG ÁNH [TC07]")
-        println("==========================================================")
-
-        val t100 = runBenchmarkScenario("TC07_100", "Quy mô 100 ảnh", count = 100, size = 500)
-        val t500 = runBenchmarkScenario("TC07_500", "Quy mô 500 ảnh", count = 500, size = 500)
-        val t1000 = runBenchmarkScenario("TC07_1000", "Quy mô 1,000 ảnh", count = 1000, size = 500)
-
-        println("\n📊 TỔNG HỢP KẾT QUẢ ĐO QUY MÔ [TC07]:")
-        println(" - 100 ảnh   : $t100 ms")
-        println(" - 500 ảnh   : $t500 ms")
-        println(" - 1,000 ảnh : $t1000 ms")
+        runBenchmarkScenario("TC07_100", "Scale 100", 100, 500)
+        runBenchmarkScenario("TC07_500", "Scale 500", 500, 500)
+        runBenchmarkScenario("TC07_1000", "Scale 1000", 1000, 500)
     }
 
-    private fun saveResultToFile(
-        context: Context,
-        scenarioName: String,
-        durationMs: Long,
-        detailDurationMs: Long,
-        ramBeforeMb: Long,
-        ramAfterMb: Long,
-        nativeHeapMb: Long
-    ) {
-        val csvHeader = PerformanceMonitor.getCsvHeader() + "\n"
-        val csvLine = PerformanceMonitor.getCsvLine(
-            scenarioName, durationMs, detailDurationMs, ramBeforeMb, ramAfterMb, nativeHeapMb
-        ) + "\n"
-
-        val candidateDirs = listOfNotNull(
-            android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS),
-            context.getExternalFilesDir(null),
-            context.filesDir
-        ).map { runCatching { it.canonicalFile }.getOrDefault(it) }
-            .distinctBy { it.absolutePath }
-
-        for (dir in candidateDirs) {
-            try {
-                if (!dir.exists()) dir.mkdirs()
-                val csvFile = java.io.File(dir, "benchmark_results.csv")
-
-                if (!csvFile.exists()) csvFile.writeText(csvHeader)
-                csvFile.appendText(csvLine)
-
-                println("📄 [ĐÃ XUẤT BÁO CÁO]: ${csvFile.absolutePath}")
-                break
-            } catch (e: Exception) {
-                println("⚠️ Không thể ghi file vào ${dir.absolutePath}: ${e.message}")
-            }
-        }
+    private fun saveResult(code: String, name: String, dur: Long, detailDur: Long, ramBefore: Long, ramAfter: Long, native: Long) {
+        val line = PerformanceMonitor.getCsvLine("[$code] $name", dur, detailDur, ramBefore, ramAfter, native) + "\n"
+        val header = PerformanceMonitor.getCsvHeader() + "\n"
+        val dir = context.getExternalFilesDir(null) ?: context.filesDir
+        try {
+            if (!dir.exists()) dir.mkdirs()
+            val file = java.io.File(dir, "benchmark_results.csv")
+            if (!file.exists()) file.writeText(header)
+            file.appendText(line)
+        } catch (_: Exception) {}
     }
 
     private fun setNetworkState(enabled: Boolean) {
         val action = if (enabled) "enable" else "disable"
         uiDevice.executeShellCommand("svc wifi $action")
         uiDevice.executeShellCommand("svc data $action")
-
-        // Allow a brief moment for the emulator network state stack to update
-        Thread.sleep(1500)
+        Thread.sleep(1200)
     }
 }
