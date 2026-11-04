@@ -177,13 +177,11 @@ class MainActivity : AppCompatActivity() {
             .setView(dialogBinding.root)
             .setPositiveButton("Thêm") { _, _ ->
                 val countStr = dialogBinding.etPicsumCount.text.toString()
-                val sizeStr = dialogBinding.etPicsumSize.text.toString()
 
                 val count = countStr.toIntOrNull() ?: 1
-                val size = sizeStr.toIntOrNull() ?: 200
 
-                viewModel.addRandomPhotos(count, size)
-                Toast.makeText(this, "Đang thêm $count ảnh ngẫu nhiên (${size}x$size)...", Toast.LENGTH_SHORT).show()
+                viewModel.addRandomPhotos(count)
+                Toast.makeText(this, "Đang thêm $count ảnh ngẫu nhiên...", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("Hủy", null)
             .show()

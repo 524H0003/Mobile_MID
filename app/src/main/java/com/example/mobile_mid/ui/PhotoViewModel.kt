@@ -7,19 +7,15 @@ import com.example.mobile_mid.data.AppDatabase
 import com.example.mobile_mid.data.NetworkModule
 import com.example.mobile_mid.data.PhotoEntity
 import com.example.mobile_mid.data.PhotoRepository
-import com.example.mobile_mid.util.PerformanceMonitor
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class PhotoViewModel(application: Application) : AndroidViewModel(application) {
     private val repository: PhotoRepository
-    private val apiService = NetworkModule.picsumApiService
     val photosState: StateFlow<List<PhotoEntity>>
 
     private val _isLoading = MutableStateFlow(false)
@@ -53,28 +49,21 @@ class PhotoViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun addRandomPhotos(count: Int, size: Int) {
+    fun addRandomPhotos(count: Int) {
         val safeCount = count.coerceIn(1, 1000)
-        val safeSize = size.coerceIn(50, 4000)
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                val response = apiService.getPhotos(page = 2, limit = safeCount)
-                if (response.isSuccessful && response.body() != null) {
-                    val photos = response.body()!!.map { picumPhoto ->
-                        val url = "${NetworkModule.BASE_URL}/id/${picumPhoto.id}/$safeSize"
-                        val title = orDefault(picumPhoto.author, "Ảnh từ Picsum")
-                        PhotoEntity(url = url, title = title)
-                    }
-                    photos.forEach { repository.insertPhoto(it) }
+                repeat(safeCount) {
+                    val randomId = (0..999).random()
+                    val url = "${NetworkModule.BASE_URL}/id/$randomId/500"
+                    val title = "Ảnh ngẫu nhiên #$randomId"
+                    val photo = PhotoEntity(url = url, title = title)
+                    repository.insertPhoto(photo)
                 }
             } finally {
                 _isLoading.value = false
             }
         }
-    }
-
-    private fun orDefault(value: String?, defaultValue: String): String {
-        return if (value.isNullOrBlank()) defaultValue else value
     }
 }
