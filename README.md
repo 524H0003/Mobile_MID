@@ -6,6 +6,7 @@ Dự án demo Android để benchmark hiệu năng việc tải và hiển thị
 
 - Android Studio Hedgehog (2023.1.1) trở lên
 - Android SDK 37
+- Docker compose
 - Thiết bị Android hoặc emulator đã bật Debug (adb)
 
 ## Chuẩn bị môi trường
@@ -82,4 +83,11 @@ File apk được xuất tại `.\app\build\outputs\apk\release\app-release-unsi
 
 ```bash
 ./gradlew installDebug
+```
+
+## Chuyển đổi phiên bản
+
+```bash
+git checkout master # Bản base
+git checkout optimized # Bản tối ưu
 ```
